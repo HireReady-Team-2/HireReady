@@ -105,7 +105,10 @@ export default function Interview() {
     if (sessionId) {
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: "Resume is already attached for this session." },
+        {
+          role: "assistant",
+          content: "Resume is already attached for this session.",
+        },
       ]);
       event.target.value = "";
       return;

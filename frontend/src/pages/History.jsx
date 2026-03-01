@@ -260,13 +260,18 @@ export default function History() {
 
                   {session.resume_filename && (
                     <div className="mb-4 text-sm text-slate-300">
-                      Resume: <span className="text-indigo-300">{session.resume_filename}</span>
+                      Resume:{" "}
+                      <span className="text-indigo-300">
+                        {session.resume_filename}
+                      </span>
                     </div>
                   )}
 
                   <div className="flex justify-end mb-4">
                     <button
-                      onClick={() => navigate(`/?sessionId=${session.session_id}`)}
+                      onClick={() =>
+                        navigate(`/?sessionId=${session.session_id}`)
+                      }
                       className="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-all"
                     >
                       Continue Chat
