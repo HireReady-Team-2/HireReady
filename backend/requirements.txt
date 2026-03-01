@@ -6,3 +6,4 @@ psycopg2-binary
 pyjwt
 PyPDF2
 python-multipart
+pandas

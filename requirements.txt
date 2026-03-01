@@ -1,6 +1,0 @@
-streamlit
-openai
-python-dotenv
-pandas
-psycopg2-binary
-PyPDF2
