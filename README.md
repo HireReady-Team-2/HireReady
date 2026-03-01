@@ -1,5 +1,6 @@
 # HireReady
 
+TEAM MEMBERS:KAVYA,HEMIN,NITHYA
 An AI-powered interview preparation and resume parsing platform designed to help candidates ace their job interviews.
 
 ## 🌟 Features
