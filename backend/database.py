@@ -313,6 +313,8 @@ class InterviewDatabase:
                  SELECT s.session_id, s.track, s.interview_type, s.difficulty,
                      s.num_questions, s.resume_text, s.resume_filename,
                      s.started_at, s.completed_at, s.status,
+            SELECT s.session_id, s.track, s.interview_type, s.difficulty,
+                   s.num_questions, s.started_at, s.completed_at, s.status,
                    u.username
             FROM interview_sessions s
             JOIN users u ON s.user_id = u.user_id

@@ -7,6 +7,8 @@ import {
   updateSessionStatus,
   getSessionDetails,
 } from "../api";
+import { useNavigate } from "react-router-dom";
+import { startInterview, sendMessage, updateSessionStatus } from "../api";
 
 const TRACKS = ["Software Development Engineer (SDE)", "Data Science"];
 const TYPES = ["Technical", "Behavioral", "Mixed"];
@@ -32,6 +34,7 @@ export default function Interview() {
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const username = localStorage.getItem("username");
 
   useEffect(() => {
