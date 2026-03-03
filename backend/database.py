@@ -443,3 +443,4 @@ class InterviewDatabase:
         finally:
             cursor.close()
             conn.close()
+

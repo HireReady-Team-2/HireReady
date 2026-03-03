@@ -150,31 +150,82 @@ def update_status(session_id: int, req: UpdateStatusRequest, user=Depends(verify
     db.update_session_status(session_id, req.status)
     return {"success": True}
 
-AREA_CONFIG = [
+TECHNICAL_AREAS = [
     {
-        "name": "LeetCode",
-        "keywords": ["algorithm", "data structure", "complexity", "coding", "code", "leetcode", "optimization", "edge case", "runtime", "bug"],
-        "recommendation": "Practice 3–4 timed LeetCode problems per week and explain trade-offs out loud."
+        "name": "Algorithms / DSA",
+        "keywords": ["algorithm", "data structure", "complexity", "time complexity", "space complexity", "optimization", "o(n)", "binary search", "sorting", "tree", "graph", "dynamic programming"],
+        "recommendation": "Practice 3–4 timed algorithm problems per week focusing on complexity analysis and edge cases."
     },
     {
-        "name": "Behavioral Questions",
-        "keywords": ["behavioral", "star", "example", "impact", "ownership", "collaboration", "leadership", "stakeholder", "conflict"],
-        "recommendation": "Prepare STAR stories for leadership, conflict, and impact with measurable outcomes."
+        "name": "Coding Quality",
+        "keywords": ["code", "coding", "implementation", "syntax", "edge case", "bug", "test case", "clean code", "readable", "modular"],
+        "recommendation": "Write clean, modular code from the start and think through edge cases before coding."
     },
     {
         "name": "System Design",
-        "keywords": ["system design", "scalability", "architecture", "throughput", "latency", "database", "cache", "api", "distributed"],
-        "recommendation": "Solve one system-design prompt weekly and practice discussing bottlenecks + scaling."
-    },
-    {
-        "name": "Communication",
-        "keywords": ["communicat", "clarity", "explain", "structure", "concise", "articulate", "justify"],
-        "recommendation": "Answer in a structured flow: assumptions → approach → trade-offs → conclusion."
+        "keywords": ["system design", "scalability", "architecture", "throughput", "latency", "database", "cache", "api", "distributed", "load balancer"],
+        "recommendation": "Solve one system-design prompt weekly and practice discussing trade-offs + scaling strategies."
     },
     {
         "name": "Problem Solving",
-        "keywords": ["approach", "problem solving", "break down", "reasoning", "hypothesis", "debug", "strategy"],
+        "keywords": ["approach", "problem solving", "break down", "reasoning", "hypothesis", "strategy", "clarifying questions", "assumptions"],
         "recommendation": "Spend 5 minutes framing your approach before coding and verify with small test cases."
+    },
+    {
+        "name": "Communication",
+        "keywords": ["communicat", "clarity", "explain", "walk through", "thought process", "articulate", "justify"],
+        "recommendation": "Talk through your thought process clearly: state assumptions, explain approach, and justify decisions."
+    },
+]
+
+BEHAVIORAL_AREAS = [
+    {
+        "name": "STAR Framework",
+        "keywords": ["star", "situation", "task", "action", "result", "specific", "measurable", "example"],
+        "recommendation": "Structure every answer using STAR: Situation → Task → Action → Result with measurable outcomes."
+    },
+    {
+        "name": "Leadership",
+        "keywords": ["leadership", "lead", "mentor", "influence", "initiative", "ownership", "decision", "responsibility"],
+        "recommendation": "Prepare 2–3 stories showing ownership, initiative, and influence without direct authority."
+    },
+    {
+        "name": "Teamwork",
+        "keywords": ["collaboration", "team", "stakeholder", "cross-functional", "communication", "conflict", "feedback"],
+        "recommendation": "Highlight examples of navigating team dynamics, resolving conflicts, and collaborating effectively."
+    },
+    {
+        "name": "Impact",
+        "keywords": ["impact", "results", "improvement", "metrics", "outcome", "value", "measurable", "business"],
+        "recommendation": "Quantify your impact with specific metrics (e.g., '30% faster', 'saved $50K', '10K users')."
+    },
+    {
+        "name": "Problem Solving",
+        "keywords": ["problem", "challenge", "obstacle", "solution", "approach", "overcome", "analytical"],
+        "recommendation": "Show structured problem-solving: how you identified root cause, explored options, and decided."
+    },
+]
+
+MIXED_AREAS = [
+    {
+        "name": "Technical Skills",
+        "keywords": ["algorithm", "code", "system design", "architecture", "complexity", "optimization", "implementation"],
+        "recommendation": "Balance coding practice with system design discussions weekly."
+    },
+    {
+        "name": "Behavioral Skills",
+        "keywords": ["star", "leadership", "collaboration", "impact", "ownership", "conflict", "team"],
+        "recommendation": "Prepare 3–5 STAR stories covering leadership, conflict, and cross-functional collaboration."
+    },
+    {
+        "name": "Communication",
+        "keywords": ["communicat", "clarity", "explain", "articulate", "structure", "justify"],
+        "recommendation": "Practice explaining both technical concepts and behavioral examples clearly and concisely."
+    },
+    {
+        "name": "Problem Solving",
+        "keywords": ["approach", "problem solving", "strategy", "reasoning", "break down", "analytical"],
+        "recommendation": "Demonstrate structured problem-solving in both technical and situational contexts."
     },
 ]
 
@@ -194,42 +245,204 @@ def _area_score(text: str, keywords: list[str]) -> int:
     return max(20, min(95, score))
 
 
+def analyze_qa_pairs_with_ai(qa_pairs: list[dict], area_config: list[dict]) -> dict:
+    """Use AI to analyze Q&A pairs and determine coverage and performance for each area."""
+    if not qa_pairs:
+        return {}
+    
+    area_names = [cfg["name"] for cfg in area_config]
+    area_descriptions = {cfg["name"]: ", ".join(cfg["keywords"][:5]) for cfg in area_config}
+    
+    # Build analysis prompt
+    qa_text = ""
+    for idx, qa in enumerate(qa_pairs[:10], 1):  # Limit to last 10 Q&As to avoid token limits
+        qa_text += f"\n\nQ{idx}: {qa['question']}\nA{idx}: {qa['answer']}\n"
+        if qa.get('feedback'):
+            qa_text += f"Feedback: {qa['feedback']}\n"
+    
+    analysis_prompt = f"""You are analyzing a technical interview. Below are the questions asked, candidate answers, and interviewer feedback.
+
+Available assessment areas:
+{chr(10).join(f"- {name}: {area_descriptions[name]}" for name in area_names)}
+
+For each area that was ACTUALLY COVERED in the interview questions:
+1. Assign a performance score 0-100 based on answer quality and feedback
+2. Note specific strengths or weaknesses
+
+Respond in this exact JSON format:
+{{
+  "covered_areas": [
+    {{
+      "area": "exact area name",
+      "score": 75,
+      "evidence": "brief explanation of what was tested and how they performed"
+    }}
+  ]
+}}
+
+Only include areas that were actually asked about. If coding wasn't tested, don't include it.
+
+Interview Q&A:
+{qa_text}
+
+JSON Response:"""
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": analysis_prompt}],
+            temperature=0.3,
+            max_tokens=800
+        )
+        
+        result_text = response.choices[0].message.content.strip()
+        # Extract JSON from markdown code blocks if present
+        if "```json" in result_text:
+            result_text = result_text.split("```json")[1].split("```")[0].strip()
+        elif "```" in result_text:
+            result_text = result_text.split("```")[1].split("```")[0].strip()
+        
+        import json
+        analysis = json.loads(result_text)
+        return analysis
+    except Exception as e:
+        print(f"AI analysis error: {e}")
+        return {}
+
+
 def build_dashboard_payload(completed_sessions: list[dict]) -> dict:
     if not completed_sessions:
         return {
             "has_data": False,
-            "areas": [{"name": cfg["name"], "score": 0} for cfg in AREA_CONFIG],
+            "areas": [],
             "strengths": [],
             "improvements": [],
             "recommendations": [],
             "summary": "Complete an interview to unlock personalized review and recommendations.",
             "source_sessions": 0,
+            "interview_context": "Mixed"
         }
 
-    assistant_text_chunks = []
+    # Detect most common interview type from recent completed sessions
+    type_counts = {}
     for session in completed_sessions:
-        for message in session.get("messages", []):
-            if message.get("role") == "assistant":
-                assistant_text_chunks.append(message.get("content", ""))
+        itype = session.get("interview_type", "Mixed")
+        type_counts[itype] = type_counts.get(itype, 0) + 1
+    
+    dominant_type = max(type_counts.items(), key=lambda x: x[1])[0] if type_counts else "Mixed"
+    
+    # Select area config based on interview type
+    if dominant_type == "Technical":
+        area_config = TECHNICAL_AREAS
+    elif dominant_type == "Behavioral":
+        area_config = BEHAVIORAL_AREAS
+    else:
+        area_config = MIXED_AREAS
 
-    corpus = _normalize("\n".join(assistant_text_chunks))
-    areas = [{"name": cfg["name"], "score": _area_score(corpus, cfg["keywords"])} for cfg in AREA_CONFIG]
+    # Extract Q&A pairs from the most recent session
+    qa_pairs = []
+    for session in completed_sessions[:3]:  # Analyze last 3 sessions
+        messages = session.get("messages", [])
+        current_question = None
+        current_answer = None
+        current_feedback = None
+        
+        for msg in messages:
+            role = msg.get("role", "")
+            content = msg.get("content", "")
+            
+            if role == "assistant":
+                # Check if this is feedback (short) or a new question
+                if current_answer and len(content) < 500:
+                    # Likely feedback for previous answer
+                    current_feedback = content
+                    if current_question and current_answer:
+                        qa_pairs.append({
+                            "question": current_question,
+                            "answer": current_answer,
+                            "feedback": current_feedback
+                        })
+                    current_question = None
+                    current_answer = None
+                    current_feedback = None
+                else:
+                    # New question
+                    if current_question and current_answer:
+                        qa_pairs.append({
+                            "question": current_question,
+                            "answer": current_answer,
+                            "feedback": current_feedback
+                        })
+                    current_question = content
+                    current_answer = None
+                    current_feedback = None
+            elif role == "user":
+                current_answer = content
+        
+        # Add final Q&A if exists
+        if current_question and current_answer:
+            qa_pairs.append({
+                "question": current_question,
+                "answer": current_answer,
+                "feedback": current_feedback
+            })
+
+    # Use AI to analyze Q&A pairs
+    ai_analysis = analyze_qa_pairs_with_ai(qa_pairs, area_config)
+    
+    covered_areas_data = ai_analysis.get("covered_areas", [])
+    
+    if not covered_areas_data:
+        # Fallback to old keyword-based method
+        assistant_text_chunks = []
+        for session in completed_sessions:
+            for message in session.get("messages", []):
+                if message.get("role") == "assistant":
+                    assistant_text_chunks.append(message.get("content", ""))
+        
+        corpus = _normalize("\n".join(assistant_text_chunks))
+        areas = [{"name": cfg["name"], "score": _area_score(corpus, cfg["keywords"])} for cfg in area_config]
+    else:
+        # Use AI analysis results
+        areas = [{"name": item["area"], "score": item["score"]} for item in covered_areas_data]
+    
+    if not areas:
+        return {
+            "has_data": False,
+            "areas": [],
+            "strengths": [],
+            "improvements": [],
+            "recommendations": [],
+            "summary": "Not enough data to analyze. Complete more interview questions.",
+            "source_sessions": len(completed_sessions),
+            "interview_context": dominant_type
+        }
+    
     ranked = sorted(areas, key=lambda a: a["score"], reverse=True)
-
-    top_areas = ranked[:2]
-    low_areas = list(reversed(ranked[-2:]))
-
-    rec_map = {cfg["name"]: cfg["recommendation"] for cfg in AREA_CONFIG}
-    recommendations = [rec_map[a["name"]] for a in low_areas]
-
+    
+    top_areas = ranked[:min(2, len(ranked))]
+    low_areas = list(reversed(ranked[-min(2, len(ranked)):]))
+    
+    # Get recommendations for low-scoring areas
+    rec_map = {cfg["name"]: cfg["recommendation"] for cfg in area_config}
+    recommendations = []
+    for a in low_areas:
+        if a["name"] in rec_map:
+            recommendations.append(rec_map[a["name"]])
+    
     strengths = [f"{a['name']} ({a['score']}/100)" for a in top_areas]
     improvements = [f"{a['name']} ({a['score']}/100)" for a in low_areas]
-
-    summary = (
-        f"Based on your last {len(completed_sessions)} completed interview"
-        f"{'s' if len(completed_sessions) > 1 else ''}, your strongest area is {top_areas[0]['name']}. "
-        f"Focus next on {low_areas[0]['name']} to improve overall interview performance."
-    )
+    
+    interview_label = f"{dominant_type} interview" if dominant_type != "Mixed" else "interviews"
+    
+    if top_areas and low_areas:
+        summary = (
+            f"Based on your last {len(completed_sessions)} completed {interview_label}"
+            f"{'s' if len(completed_sessions) > 1 else ''}, your strongest area is {top_areas[0]['name']}. "
+            f"Focus next on {low_areas[0]['name']} to improve performance."
+        )
+    else:
+        summary = f"Analysis based on {len(completed_sessions)} completed {interview_label}{'s' if len(completed_sessions) > 1 else ''}."
 
     return {
         "has_data": True,
@@ -239,6 +452,7 @@ def build_dashboard_payload(completed_sessions: list[dict]) -> dict:
         "recommendations": recommendations,
         "summary": summary,
         "source_sessions": len(completed_sessions),
+        "interview_context": dominant_type
     }
 
 

@@ -171,9 +171,18 @@ export default function Results() {
             <em className="not-italic text-[#c84b2f]">Dashboard.</em>
           </h1>
           <p className="text-[#8a7060] text-base max-w-3xl">
-            Review what you are good at and where to focus next (LeetCode,
-            Behavioral Questions, System Design and more).
+            Review what you are good at and where to focus next based on your
+            completed interviews.
           </p>
+          {!loading && data?.interview_context && (
+            <div className="mt-4">
+              <span className="inline-flex items-center gap-2 bg-[#1a1007] text-[#fdf8f3] px-3 py-1.5 rounded-lg text-xs font-bold">
+                <span>📊</span>
+                Analysis based on: {data.interview_context} Interview
+                {data.source_sessions > 1 ? "s" : ""}
+              </span>
+            </div>
+          )}
         </div>
 
         {loading && (
@@ -190,23 +199,31 @@ export default function Results() {
           </div>
         )}
 
-        {!loading && (!data || !data.has_data) && (
-          <div className="bg-white border border-[#e8ddd3] rounded-2xl p-14 text-center shadow-sm">
-            <div className="text-6xl mb-4">📊</div>
-            <h2
-              className="text-2xl font-bold text-[#1a1007] mb-2"
-              style={{ fontFamily: "'DM Serif Display', serif" }}
-            >
-              No completed interview yet.
-            </h2>
-            <p className="text-[#8a7060]">
-              Complete an interview and come back here to see personalized
-              review and recommendations.
-            </p>
-          </div>
-        )}
+        {!loading &&
+          (!data ||
+            !data.has_data ||
+            !data.areas ||
+            data.areas.length === 0) && (
+            <div className="bg-white border border-[#e8ddd3] rounded-2xl p-14 text-center shadow-sm">
+              <div className="text-6xl mb-4">📊</div>
+              <h2
+                className="text-2xl font-bold text-[#1a1007] mb-2"
+                style={{ fontFamily: "'DM Serif Display', serif" }}
+              >
+                {data?.has_data
+                  ? "Not enough Q&A data"
+                  : "No completed interview yet"}
+              </h2>
+              <p className="text-[#8a7060]">
+                {data?.has_data
+                  ? data.summary ||
+                    "Complete more interview questions with detailed Q&A to see analysis."
+                  : "Complete an interview and come back here to see personalized review and recommendations."}
+              </p>
+            </div>
+          )}
 
-        {!loading && data?.has_data && (
+        {!loading && data?.has_data && data.areas && data.areas.length > 0 && (
           <div className="grid lg:grid-cols-[1.2fr_1fr] gap-6 animate-fade-up">
             <RadarChart areas={data.areas} />
 
@@ -253,10 +270,11 @@ export default function Results() {
                   ))}
                 </ul>
                 <div className="mt-4 text-xs text-[#8a7060] leading-relaxed bg-[#fdf8f3] border border-[#f0e8e0] rounded-lg px-3 py-2">
-                  Scores are estimated from your completed interview feedback
-                  text by matching strength/improvement keywords for each area
-                  (LeetCode, Behavioral, System Design, Communication, Problem
-                  Solving). They are directional guidance, not exact grading.
+                  <strong>How scores work:</strong> AI analyzes your actual
+                  interview Q&A to identify which areas were tested (e.g.,
+                  algorithms, system design). Only areas you were asked about
+                  appear here. Scores reflect your answer quality and
+                  feedback—not keyword matching.
                 </div>
               </div>
             </div>
