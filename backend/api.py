@@ -9,10 +9,23 @@ import os
 import re
 import jwt
 import datetime
+import traceback
 
 load_dotenv()
 
 app = FastAPI(title="HireReady API", root_path="/api")
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "Internal Server Error",
+            "detail": str(exc),
+            "traceback": traceback.format_exc()
+        }
+    )
+
 try:
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 except Exception as e:
