@@ -101,6 +101,8 @@ class InterviewDatabase:
 
     def create_user(self, username: str, password: str) -> tuple:
         """Create a new user. Returns (user_id, success, message)."""
+        conn = None
+        cursor = None
         try:
             conn = self.get_connection()
             cursor = conn.cursor(cursor_factory=RealDictCursor)
@@ -132,8 +134,10 @@ class InterviewDatabase:
         except Exception as e:
             return None, False, f"Error creating user: {str(e)}"
         finally:
-            cursor.close()
-            conn.close()
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
 
     def authenticate_user(self, username: str, password: str) -> tuple:
         """Authenticate user. Returns (user_id, success, message)."""
