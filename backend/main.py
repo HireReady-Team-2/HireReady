@@ -13,8 +13,18 @@ import datetime
 load_dotenv()
 
 app = FastAPI(title="HireReady API", root_path="/api")
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-db = InterviewDatabase()
+try:
+    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+except Exception as e:
+    print(f"CRITICAL: Failed to initialize OpenAI: {e}")
+    client = None
+
+try:
+    db = InterviewDatabase()
+except Exception as e:
+    print(f"CRITICAL: Failed to initialize Database: {e}")
+    db = None
+
 security = HTTPBearer()
 
 SECRET_KEY = os.getenv("SECRET_KEY", "hireready-secret-key-2026")

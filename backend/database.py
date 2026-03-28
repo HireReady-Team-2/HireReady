@@ -16,8 +16,20 @@ class InterviewDatabase:
         """Initialize database connection and create tables if they don't exist."""
         self.database_url = database_url or os.getenv("DATABASE_URL")
         if not self.database_url:
-            raise ValueError("DATABASE_URL environment variable is not set. Please add it to your .env file.")
-        self.init_database()
+            print("WARNING: DATABASE_URL environment variable is not set.")
+            return
+
+        # Vercel -> Supabase needs sslmode=require in some AWS regions to prevent connection resets
+        if "supabase.co" in self.database_url and "sslmode=" not in self.database_url:
+            if "?" in self.database_url:
+                self.database_url += "&sslmode=require"
+            else:
+                self.database_url += "?sslmode=require"
+
+        try:
+            self.init_database()
+        except Exception as e:
+            print(f"CRITICAL: Could not connect to database on startup. Error: {e}")
 
     def get_connection(self):
         """Create and return a database connection."""
