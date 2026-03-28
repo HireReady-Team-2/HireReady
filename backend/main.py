@@ -19,6 +19,19 @@ security = HTTPBearer()
 
 SECRET_KEY = os.getenv("SECRET_KEY", "hireready-secret-key-2026")
 
+class StripAPIPrefixMiddleware:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] in ("http", "websocket") and scope["path"].startswith("/api"):
+            scope["path"] = scope["path"][4:]
+            if not scope["path"]:
+                scope["path"] = "/"
+        await self.app(scope, receive, send)
+
+app.add_middleware(StripAPIPrefixMiddleware)
+
 # ─── CORS ─────────────────────────────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
