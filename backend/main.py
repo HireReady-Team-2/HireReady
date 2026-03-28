@@ -1,8 +1,12 @@
 import sys
 import traceback
+from fastapi import FastAPI
+
+# Satisfy Vercel's static AST analyzer
+app = FastAPI(title="Error Wrapper")
 
 def create_error_app(error_msg: str):
-    async def app(scope, receive, send):
+    async def asgi_app(scope, receive, send):
         if scope['type'] == 'http':
             await send({
                 'type': 'http.response.start',
@@ -13,10 +17,11 @@ def create_error_app(error_msg: str):
                 'type': 'http.response.body',
                 'body': error_msg.encode('utf-8'),
             })
-    return app
+    return asgi_app
 
 try:
-    from api import app
+    from api import app as real_app
+    app = real_app
 except Exception as e:
     fatal_error = traceback.format_exc()
     print("CRITICAL IMPORT ERROR IN VERCEL SERVERLESS FUNCTION:\n", fatal_error)
