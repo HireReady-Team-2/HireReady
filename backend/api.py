@@ -121,6 +121,8 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
 # ─── Auth Routes ───────────────────────────────────────────────────────────────
 @app.post("/auth/signup")
 def signup(req: AuthRequest):
+    if not db:
+        raise HTTPException(status_code=500, detail="Database connection is not initialized. Please verify DATABASE_URL and ensure it uses IPv4 pooling on Vercel.")
     user_id, success, message = db.create_user(req.username, req.password)
     if not success:
         raise HTTPException(status_code=400, detail=message)
@@ -129,6 +131,8 @@ def signup(req: AuthRequest):
 
 @app.post("/auth/login")
 def login(req: AuthRequest):
+    if not db:
+        raise HTTPException(status_code=500, detail="Database connection is not initialized. Please verify DATABASE_URL and ensure it uses IPv4 pooling on Vercel.")
     user_id, success, message = db.authenticate_user(req.username, req.password)
     if not success:
         raise HTTPException(status_code=401, detail=message)

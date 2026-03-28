@@ -33,7 +33,10 @@ class InterviewDatabase:
 
     def get_connection(self):
         """Create and return a database connection."""
-        return psycopg2.connect(self.database_url)
+        try:
+            return psycopg2.connect(self.database_url)
+        except Exception as e:
+            raise Exception(f"Failed to connect to Supabase. Make sure to use the IPv4 connection pooler URL on Vercel. Error: {str(e)}")
 
     def init_database(self):
         """Create database tables if they don't exist."""
@@ -98,9 +101,10 @@ class InterviewDatabase:
 
     def create_user(self, username: str, password: str) -> tuple:
         """Create a new user. Returns (user_id, success, message)."""
-        conn = self.get_connection()
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
         try:
+            conn = self.get_connection()
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            
             cursor.execute("SELECT user_id, password_hash FROM users WHERE username = %s", (username,))
             existing_user = cursor.fetchone()
             if existing_user:
@@ -111,7 +115,11 @@ class InterviewDatabase:
                         (password_hash, salt, existing_user['user_id'])
                     )
                     conn.commit()
+                    cursor.close()
+                    conn.close()
                     return existing_user['user_id'], True, "Password set successfully for existing account"
+                cursor.close()
+                conn.close()
                 return None, False, "Username already exists"
             password_hash, salt = self._hash_password(password)
             cursor.execute(
@@ -129,20 +137,23 @@ class InterviewDatabase:
 
     def authenticate_user(self, username: str, password: str) -> tuple:
         """Authenticate user. Returns (user_id, success, message)."""
-        conn = self.get_connection()
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
-        cursor.execute("SELECT user_id, password_hash, salt FROM users WHERE username = %s", (username,))
-        result = cursor.fetchone()
-        cursor.close()
-        conn.close()
-        if not result:
-            return None, False, "Username not found"
-        if result['password_hash'] is None or result['salt'] is None:
-            return None, False, "Account needs password setup. Please use Sign Up."
-        password_hash, _ = self._hash_password(password, result['salt'])
-        if password_hash == result['password_hash']:
-            return result['user_id'], True, "Login successful"
-        return None, False, "Incorrect password"
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            cursor.execute("SELECT user_id, password_hash, salt FROM users WHERE username = %s", (username,))
+            result = cursor.fetchone()
+            cursor.close()
+            conn.close()
+            if not result:
+                return None, False, "Username not found"
+            if result['password_hash'] is None or result['salt'] is None:
+                return None, False, "Account needs password setup. Please use Sign Up."
+            password_hash, _ = self._hash_password(password, result['salt'])
+            if password_hash == result['password_hash']:
+                return result['user_id'], True, "Login successful"
+            return None, False, "Incorrect password"
+        except Exception as e:
+            return None, False, str(e)
 
     def get_user_id(self, username: str) -> Optional[int]:
         """Get user_id for a given username."""
