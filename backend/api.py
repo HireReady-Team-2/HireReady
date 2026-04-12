@@ -162,6 +162,40 @@ def is_off_topic_request(text: str) -> bool:
     return any(re.search(pattern, normalized) for pattern in OFF_TOPIC_PATTERNS)
 
 
+STOPWORDS = {
+    "the", "and", "for", "with", "from", "that", "this", "your", "you", "are", "our", "their",
+    "have", "has", "will", "can", "into", "about", "using", "used", "role", "position", "job",
+    "work", "experience", "skills", "responsibilities", "requirements", "ability", "team", "level",
+    "years", "year", "plus", "must", "strong", "good", "knowledge", "preferred", "required",
+}
+
+
+def tokenize_keywords(text: str) -> set[str]:
+    tokens = re.findall(r"[a-zA-Z][a-zA-Z0-9+#.-]{2,}", (text or "").lower())
+    return {t for t in tokens if t not in STOPWORDS}
+
+
+def get_resume_jd_overlap(resume_text: str, job_description: str) -> dict:
+    resume_tokens = tokenize_keywords(resume_text)
+    jd_tokens = tokenize_keywords(job_description)
+
+    if not resume_tokens or not jd_tokens:
+        return {"score": 0.0, "level": "unknown", "shared": []}
+
+    shared = sorted(resume_tokens.intersection(jd_tokens))
+    # Ratio of JD terms covered by resume terms.
+    score = len(shared) / max(len(jd_tokens), 1)
+
+    if score >= 0.2:
+        level = "high"
+    elif score >= 0.1:
+        level = "medium"
+    else:
+        level = "low"
+
+    return {"score": round(score, 3), "level": level, "shared": shared[:20]}
+
+
 def get_latest_interviewer_question(messages: list) -> str:
     for msg in reversed(messages):
         if msg.get("role") == "assistant":
@@ -234,11 +268,23 @@ def start_interview(req: StartSessionRequest, user=Depends(verify_token)):
     )
     if not llm:
         raise HTTPException(status_code=500, detail="LLM not initialized properly. Check API keys.")
-    messages = [SystemMessage(content=system_prompt)]
+    interview_context_message = build_interview_context_message(
+        req.interview_type,
+        req.difficulty,
+        req.resume_text,
+        req.job_description,
+    )
+    messages = [
+        SystemMessage(content=interview_context_message),
+        SystemMessage(content=system_prompt),
+    ]
     response = llm.invoke(messages)
     ai_msg = response.content
     
-    dict_messages = [{"role": "system", "content": system_prompt}]
+    dict_messages = [
+        {"role": "system", "content": interview_context_message},
+        {"role": "system", "content": system_prompt},
+    ]
     
     session_id = db.create_session(
         user["user_id"], req.interview_type, req.difficulty, req.num_questions
@@ -259,6 +305,13 @@ def chat(req: ChatRequest, user=Depends(verify_token)):
     if req.messages and req.messages[-1]["role"] == "user":
         latest_user_message = req.messages[-1]["content"]
         db.save_message(req.session_id, "user", latest_user_message)
+
+    interview_context_message = build_interview_context_message(
+        req.interview_type,
+        req.difficulty,
+        req.resume_text,
+        req.job_description,
+    )
 
     # Reject off-topic requests immediately so the simulator stays in interview mode.
     if is_off_topic_request(latest_user_message):
@@ -285,6 +338,7 @@ def chat(req: ChatRequest, user=Depends(verify_token)):
         return {"message": ai_reply, "completed": False}
 
     langchain_messages = []
+    langchain_messages.append(SystemMessage(content=interview_context_message))
     for msg in req.messages:
         if msg["role"] == "system":
             langchain_messages.append(SystemMessage(content=msg["content"]))
@@ -750,6 +804,15 @@ def build_system_prompt(interview_type, difficulty, num_questions, resume_text="
 - Technical: Focus purely on coding, systems, and domain knowledge.
 - Behavioral: Demand the STAR method.
 - Mixed: Alternate between technical and behavioral.
+- Treat the job description as the role definition and the resume as the personalization source.
+- Build the interview around the job description so the questions stay role-relevant even when the resume is from a different but related background.
+- Use the resume to adapt the wording, verify claims, and probe transferable experience from the candidate's background.
+- If the job description and resume have low overlap, do not fall back to resume-only questions; keep the role centered and ask how the candidate's background maps to the target role.
+- Build every interview question from BOTH the candidate resume and the job description.
+- Use the job description to identify required skills, responsibilities, and gaps that should be tested.
+- Use the resume to personalize questions, verify claimed experience, and probe relevant depth.
+- Prefer questions that sit at the overlap of resume evidence and job description requirements, but still keep the role itself in view.
+- If the resume and job description disagree, ask role-based questions first and then probe how the candidate's resume experience transfers to that role.
 
 Start by greeting the candidate professionally and asking the first question."""
 
@@ -759,6 +822,51 @@ Start by greeting the candidate professionally and asking the first question."""
             base_prompt += f"--- Candidate's Resume ---\n{resume_text}\n\n"
         if job_description:
             base_prompt += f"--- Job Description ---\n{job_description}\n\n"
-        base_prompt += "Ensure your questions are rigorously tailored to the candidate's experience."
+        base_prompt += "Ensure your questions are rigorously tailored to BOTH the candidate's experience and the job requirements."
 
     return base_prompt
+
+
+def build_interview_context_message(interview_type: str, difficulty: str, resume_text: str = "", job_description: str = "") -> str:
+    overlap = get_resume_jd_overlap(resume_text, job_description)
+    overlap_level = overlap["level"]
+    overlap_score = overlap["score"]
+    shared_terms = ", ".join(overlap["shared"]) if overlap["shared"] else "None"
+
+    balance_guidance = ""
+    if overlap_level == "low":
+        balance_guidance = (
+            "Low overlap mode: ask mostly role-defined questions from the job description, "
+            "then connect each question to transferable experience from the resume."
+        )
+    elif overlap_level == "medium":
+        balance_guidance = (
+            "Medium overlap mode: balance role-defined questions with resume-grounded depth checks."
+        )
+    else:
+        balance_guidance = (
+            "High overlap mode: blend job-description requirements and resume evidence evenly."
+        )
+
+    context_message = f"""You are conducting a {difficulty} {interview_type} interview.
+
+Use BOTH the resume and the job description for every question, but keep the job description as the role target and the resume as the candidate context.
+- Job description: define the role, required skills, responsibilities, and the main interview themes.
+- Resume: personalize, verify claims, and show how the candidate's experience transfers into the target role.
+- If the job description and resume have low overlap, stay role-focused and ask how the candidate's background maps to the role instead of switching to resume-only topics.
+- Ask questions that combine both sources when they overlap.
+- If the job description asks for a skill the resume does not show, probe that skill explicitly while connecting it back to the candidate's experience.
+
+Alignment signal:
+- Overlap level: {overlap_level}
+- Overlap score: {overlap_score}
+- Shared terms: {shared_terms}
+- Guidance: {balance_guidance}
+
+Candidate resume:
+{resume_text or 'No resume provided.'}
+
+Job description:
+{job_description or 'No job description provided.'}
+"""
+    return context_message
