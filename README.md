@@ -76,10 +76,11 @@ HireReady leverages OpenAI's GPT-4 to create an intelligent interview coach that
 ### Backend
 
 - **Framework:** FastAPI with Uvicorn
-- **AI Integration:** OpenAI SDK (GPT-4)
+- **AI Integration:** LangChain + OpenAI SDK (GPT-4 / configurable LLM)
 - **Authentication:** PyJWT for JWT token management
 - **Database:** PostgreSQL with psycopg2-binary
 - **Environment:** python-dotenv for configuration
+- **Guardrails:** Regex-based off-topic and direct-answer-request blocking
 
 ### Frontend
 
@@ -112,12 +113,20 @@ HireReady leverages OpenAI's GPT-4 to create an intelligent interview coach that
 - **Customization:**
   - Variable question count (3-10 questions)
   - Resume-based personalization
-  - Optional job description for targeted practice
+  - Optional job description for targeted, role-specific practice
 - **Real-time Interaction:**
   - Chat-style interface with AI interviewer
-  - Context-aware follow-up questions
-  - Automatic session completion detection
+  - Context-aware follow-up questions before advancing to next question
+  - Automatic session completion detection based on AI evaluation signals
   - Streaming responses for natural conversation flow
+- **AI Guardrails (New):**
+  - Hint-only coaching — AI refuses to give full answers and provides progressive hints instead
+  - Off-topic blocking — non-interview topics (food, movies, weather, etc.) are automatically redirected
+  - Anti-prompt-injection guard — ignores attempts to override interviewer instructions
+- **Resume ↔ Job Description Matching (New):**
+  - Keyword overlap scoring between resume and JD at session start
+  - Adaptive interview strategy based on overlap level (low / medium / high)
+  - Questions blend both resume evidence and JD requirements for maximum relevance
 
 ### 📊 History & Analytics
 
@@ -154,7 +163,7 @@ HireReady leverages OpenAI's GPT-4 to create an intelligent interview coach that
 ```text
 HireReady-Fork/
 ├── backend/
-│   ├── main.py            # FastAPI app + routes + OpenAI calls
+│   ├── api.py             # FastAPI app + routes + LangChain/OpenAI calls + guardrails
 │   ├── database.py        # PostgreSQL table init + data access layer
 │   └── requirements.txt
 ├── frontend/
@@ -475,9 +484,26 @@ All timestamp fields use UTC timezone for consistency across different server lo
 
 ### Interview Completion Detection
 
-- Interview is marked as complete when AI response contains both "thank you" and "overall"
-- This heuristic approach detects when the interviewer provides closing remarks
+- Interview is marked as complete when the AI response contains evaluation keywords: `evaluation`, `overall`, `assessment`, `final feedback`, `feedback`, `summary`, or `conclusion`
+- Completion is **not** triggered purely by message count — follow-up questions can add extra turns
 - Users can also manually end sessions
+
+### AI Guardrails
+
+- **Direct answer blocking:** Regex patterns detect requests like "give me the answer", "full solution", "solve it for me", etc. The AI responds with hints only
+- **Off-topic blocking:** Patterns for food, movies, weather, politics, health, and other non-interview topics trigger a redirect: *"That is off-topic. Let's return to the interview."*
+- **Interview-related override:** If a flagged message also contains interview-related terms (e.g., "health of a database"), it is not blocked to avoid false positives
+- **Hint-only coaching:** The AI provides 1–3 progressive hints per request, each building on the candidate's latest attempt rather than restarting from scratch
+
+### Resume ↔ JD Overlap Scoring
+
+- At session start, keyword overlap between the resume and job description is computed
+- Shared terms are extracted after stopword removal
+- Overlap levels: `high` (≥ 20% of JD keywords covered), `medium` (≥ 10%), `low` (< 10%)
+- Interview strategy adapts accordingly:
+  - **Low:** role-first questions, then connect to transferable resume experience
+  - **Medium:** balanced role + resume depth checks
+  - **High:** evenly blended questions from both sources
 
 ### Authentication Flow
 
@@ -594,6 +620,18 @@ psql -U username -d database_name
 \d table_name
 ```
 
+## Changelog
+
+### Recent Updates (April 2026)
+
+- **AI Guardrails:** Added regex-based blocking for direct answer requests and off-topic messages
+- **Hint-Only Coaching:** AI now gives progressive hints instead of full solutions when candidates request answers
+- **Resume ↔ JD Overlap Scoring:** Keyword overlap is computed at session start to dynamically adapt interview strategy
+- **Smarter Completion Detection:** Session completion is now driven by AI evaluation signals, not raw message count
+- **Dual-Source Prompting:** System prompt now explicitly instructs the AI to blend both resume evidence and JD requirements for every question
+- **LangChain Integration:** Backend migrated to LangChain for flexible LLM switching and improved message handling
+- **Follow-up Question Logic:** AI asks one concise follow-up before advancing if an answer is vague or incomplete
+
 ## License
 
 This project is open-source and available for educational purposes.
@@ -608,6 +646,6 @@ If you encounter any issues or have questions:
 
 ---
 
-**Made with ❤️ by Hemin, Kavya, and Nithya**
+**Made by Hemin, Kavya, and Nithya**
 
 _Empowering job seekers to nail their next interview, one practice session at a time._
